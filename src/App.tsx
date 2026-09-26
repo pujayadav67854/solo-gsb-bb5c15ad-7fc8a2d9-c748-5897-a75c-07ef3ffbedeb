@@ -64,6 +64,7 @@ import {
   relationKey,
   relationStats,
 } from './lib/relations'
+import { auditQuoteOccurrences, planQuoteBackfill } from './lib/missingQuotes'
 import { TextView, type ViewRect } from './components/TextView'
 import { TextEditor } from './components/TextEditor'
 import { Sidebar } from './components/Sidebar'
@@ -126,9 +127,14 @@ export default function App() {
   const [notice, setNotice] = useState<Notice | null>(null)
   /** 侧栏点击覆盖审计结果后高亮的区间 */
   const [activeCoverage, setActiveCoverage] = useState<{ start: number; end: number; key: string } | null>(null)
+  /** 同引文漏标审阅：当前选中的模板标注 ID */
+  const [quoteTemplateId, setQuoteTemplateId] = useState<string | null>(null)
+  /** 侧栏点击漏标 / 已标注位置后高亮的区间 */
+  const [activeQuoteRange, setActiveQuoteRange] = useState<{ start: number; end: number } | null>(null)
   const rootElRef = useRef<HTMLElement | null>(null)
   const conflictSectionRef = useRef<HTMLElement | null>(null)
   const coverageSectionRef = useRef<HTMLElement | null>(null)
+  const quoteSectionRef = useRef<HTMLElement | null>(null)
   const snapshotSectionRef = useRef<HTMLElement | null>(null)
   const samplingSectionRef = useRef<HTMLElement | null>(null)
   const datasetSplitSectionRef = useRef<HTMLElement | null>(null)
@@ -200,6 +206,26 @@ export default function App() {
       ? { start: activeCoverage.start, end: activeCoverage.end }
       : null
     : null
+
+  // ---------- 同引文漏标审阅 ----------
+
+  // 模板选择、原文、标注（编辑 / 重定位 / 导入）任何变化都自动重算
+  const quoteAudit = useMemo(
+    () =>
+      quoteTemplateId
+        ? auditQuoteOccurrences(doc.text, doc.annotations, quoteTemplateId)
+        : null,
+    [doc.text, doc.annotations, quoteTemplateId],
+  )
+  const quoteMissingCount = quoteAudit?.missingCount ?? 0
+  // 点击的出现位置若已不在最新枚举结果中（被补过 / 原文变化），取消高亮，避免指向陈旧区间
+  const activeQuoteOccurrence =
+    activeQuoteRange &&
+    quoteAudit?.occurrences.some(
+      (o) => o.start === activeQuoteRange.start && o.end === activeQuoteRange.end,
+    )
+      ? activeQuoteRange
+      : null
 
   // ---------- 标注快照对比 ----------
 
@@ -476,12 +502,52 @@ export default function App() {
   const focusCoverageIssue = (item: CoverageIssue) => {
     setActiveId(null)
     setActivePairIds(null)
+    setActiveQuoteRange(null)
     setActiveCoverage({
       start: item.start,
       end: item.end,
       key: `${item.kind}:${item.start}:${item.end}`,
     })
     scrollOffsetIntoView(item.start)
+  }
+
+  // ---------- 同引文漏标审阅 ----------
+
+  /**
+   * 批量补建漏标：以当前文档重新核对勾选位置（保证与侧栏列表一致），
+   * 在同一次 setDoc 中再以最新状态核对一次后原子落地；
+   * 已变化或已被补过的位置自动跳过。返回补建 / 跳过条数，供侧栏给出结果提示。
+   */
+  const applyQuoteBackfill = (
+    positions: Array<{ start: number; end: number }>,
+  ): { created: number; skipped: number } => {
+    if (!quoteTemplateId) return { created: 0, skipped: 0 }
+    const now = Date.now()
+    // 与侧栏列表同源（同一次渲染的 doc）：先算出结果用于提示
+    const preview = planQuoteBackfill(doc.text, doc.annotations, quoteTemplateId, positions, now)
+    if (!preview) return { created: 0, skipped: 0 }
+    if (preview.created.length > 0) {
+      setDoc((d) => {
+        // 落地前以最新状态再核对一次，保持与批量标签相同的原子语义
+        const plan = planQuoteBackfill(d.text, d.annotations, quoteTemplateId, positions, now)
+        if (!plan || plan.created.length === 0) return d
+        return { ...d, annotations: plan.annotations, updatedAt: now }
+      })
+    }
+    return { created: preview.created.length, skipped: preview.skippedCount }
+  }
+
+  /** 侧栏点击出现位置：滚动到起点并高亮该区间（可跨段） */
+  const focusQuoteOccurrence = (occ: { start: number; end: number }) => {
+    setActiveId(null)
+    setActivePairIds(null)
+    setActiveCoverage(null)
+    setActiveQuoteRange({ start: occ.start, end: occ.end })
+    scrollOffsetIntoView(occ.start)
+  }
+
+  const scrollToQuoteSweep = () => {
+    quoteSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   // ---------- 标注快照对比 ----------
@@ -674,6 +740,7 @@ export default function App() {
     setActiveId(null)
     setActivePairIds(null)
     setActiveCoverage(null)
+    setActiveQuoteRange(null)
     clearSelection()
   }
 
@@ -719,6 +786,7 @@ export default function App() {
     if (a.status !== 'bound') return
     setActivePairIds(null)
     setActiveCoverage(null)
+    setActiveQuoteRange(null)
     setActiveId(a.id)
     scrollOffsetIntoView(a.start)
   }
@@ -727,6 +795,7 @@ export default function App() {
   const focusConflict = (c: ConflictItem) => {
     setActiveId(null)
     setActiveCoverage(null)
+    setActiveQuoteRange(null)
     setActivePairIds([...c.annotationIds] as [string, string])
     scrollOffsetIntoView(c.overlapStart)
   }
@@ -924,6 +993,7 @@ export default function App() {
       setActiveId(null)
       setActivePairIds(null)
       setActiveCoverage(null)
+      setActiveQuoteRange(null)
     } catch {
       alert('文件解析失败，请确认是有效的 JSON 导出文件。')
     } finally {
@@ -945,6 +1015,7 @@ export default function App() {
     setActiveId(null)
     setActivePairIds(null)
     setActiveCoverage(null)
+    setActiveQuoteRange(null)
   }
 
   // ---------- 审阅报告 ----------
@@ -1013,6 +1084,16 @@ export default function App() {
             >
               覆盖审计
               {coverageIssueCount > 0 && <span className="topbar-count">{coverageIssueCount}</span>}
+            </button>
+          )}
+          {mode === 'view' && (
+            <button
+              className={`btn ${quoteMissingCount > 0 ? 'btn-warn' : 'btn-ghost'}`}
+              onClick={scrollToQuoteSweep}
+              title="以一条已绑定标注为模板，审阅其引文在全文中漏标的位置"
+            >
+              漏标审阅
+              {quoteMissingCount > 0 && <span className="topbar-count">{quoteMissingCount}</span>}
             </button>
           )}
           {mode === 'view' && (
@@ -1130,6 +1211,7 @@ export default function App() {
                 conflictRanges={conflictRanges}
                 coverageKindByStart={coverage.marksByStart}
                 activeCoverageRange={activeCoverageRange}
+                activeQuoteRange={activeQuoteOccurrence}
                 onSelect={handleSelect}
                 onInspect={handleInspect}
                 registerRef={(el) => {
@@ -1143,6 +1225,9 @@ export default function App() {
               {activeConflictCount > 0 && <span className="foot-conflict">（{activeConflictCount} 条冲突待审阅）</span>}
               {doc.coverageTags.length > 0 && coverageIssueCount > 0 && (
                 <span className="foot-coverage">（{coverageIssueCount} 处覆盖问题）</span>
+              )}
+              {quoteAudit && quoteMissingCount > 0 && (
+                <span className="foot-quote-sweep">（{quoteMissingCount} 处同引文漏标）</span>
               )}
               {doc.baseline && pendingReviewCount > 0 && (
                 <span className="foot-snapshot">（{pendingReviewCount} 条快照差异待审）</span>
@@ -1174,6 +1259,13 @@ export default function App() {
             onChangeCoverageTags={changeCoverageTags}
             onFocusCoverage={focusCoverageIssue}
             coverageSectionRef={coverageSectionRef}
+            quoteTemplateId={quoteTemplateId}
+            quoteAudit={quoteAudit}
+            activeQuoteRange={activeQuoteOccurrence}
+            onChangeQuoteTemplate={setQuoteTemplateId}
+            onBackfillQuotes={applyQuoteBackfill}
+            onFocusQuoteOccurrence={focusQuoteOccurrence}
+            quoteSectionRef={quoteSectionRef}
             baseline={doc.baseline}
             snapshotDiffs={snapshotDiffs}
             reviewedKeys={reviewedKeySet}

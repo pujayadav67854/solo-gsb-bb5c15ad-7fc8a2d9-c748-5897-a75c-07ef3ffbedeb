@@ -14,6 +14,7 @@ import { REASON_LABEL } from '../lib/relocation'
 import { badgeColor } from '../lib/segments'
 import type { ConflictItem } from '../lib/conflicts'
 import type { CoverageIssue, CoverageResult } from '../lib/coverage'
+import type { QuoteAudit } from '../lib/missingQuotes'
 import type { SnapshotDiffItem } from '../lib/snapshot'
 import type { SampleQueueResult } from '../lib/sampling'
 import type { CardinalityViolation, RelationView } from '../lib/relations'
@@ -21,6 +22,7 @@ import { SnapshotSection } from './SnapshotSection'
 import { SamplingSection } from './SamplingSection'
 import { DatasetSplitSection } from './DatasetSplitSection'
 import { BulkSection } from './BulkSection'
+import { MissingQuoteSection } from './MissingQuoteSection'
 import { RelationsSection } from './RelationsSection'
 
 interface Props {
@@ -39,6 +41,17 @@ interface Props {
   onFocusCoverage: (issue: CoverageIssue) => void
   /** 覆盖审计分区的滚动定位 ref（顶栏按钮用） */
   coverageSectionRef?: RefObject<HTMLElement | null>
+  /** 同引文漏标审阅 */
+  quoteTemplateId: string | null
+  quoteAudit: QuoteAudit | null
+  activeQuoteRange: { start: number; end: number } | null
+  onChangeQuoteTemplate: (id: string | null) => void
+  onBackfillQuotes: (
+    positions: Array<{ start: number; end: number }>,
+  ) => { created: number; skipped: number }
+  onFocusQuoteOccurrence: (occ: { start: number; end: number }) => void
+  /** 漏标审阅分区的滚动定位 ref（顶栏按钮用） */
+  quoteSectionRef?: RefObject<HTMLElement | null>
   /** 标注快照对比 */
   baseline: AnnotationBaseline | null
   snapshotDiffs: SnapshotDiffItem[]
@@ -574,6 +587,18 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(props, se
         onFocus={props.onFocus}
         onEdit={props.onEdit}
         coverageSectionRef={props.coverageSectionRef}
+      />
+
+      <MissingQuoteSection
+        text={props.text}
+        annotations={props.annotations}
+        templateId={props.quoteTemplateId}
+        audit={props.quoteAudit}
+        activeRange={props.activeQuoteRange}
+        onChangeTemplate={props.onChangeQuoteTemplate}
+        onBackfill={props.onBackfillQuotes}
+        onFocusOccurrence={props.onFocusQuoteOccurrence}
+        sectionRef={props.quoteSectionRef}
       />
 
       <SnapshotSection

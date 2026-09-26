@@ -2803,3 +2803,232 @@ button.rel-end:hover {
 .rel-over-both .rel-end {
   border-color: #e8918d;
 }
+
+/* ---------- 同引文漏标审阅 ---------- */
+
+.side-heading-mq {
+  color: #0f766e;
+}
+
+.mq-count-badge {
+  background: #0f766e;
+}
+
+.foot-quote-sweep {
+  color: #0f766e;
+  font-weight: 600;
+}
+
+.mq-select {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.mq-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.mq-summary-item strong {
+  color: var(--ink);
+}
+
+.mq-summary-missing {
+  color: #0f766e;
+  font-weight: 600;
+}
+
+.mq-summary-missing strong {
+  color: #0f766e;
+}
+
+.mq-template {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.mq-template-label {
+  font-weight: 600;
+}
+
+.mq-template-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.mq-template-none {
+  color: var(--ink-faint);
+}
+
+.mq-template-note {
+  flex-basis: 100%;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mq-msg {
+  margin: 0 0 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.mq-msg-ok {
+  background: #ecfdf3;
+  color: #1a6b3c;
+}
+
+.mq-msg-info {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.mq-ok {
+  margin: 4px 0 10px;
+  color: #1a6b3c;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.mq-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.mq-toolbar-count {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.mq-toolbar-count em {
+  font-style: normal;
+  color: #0f766e;
+  font-weight: 600;
+}
+
+.mq-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mq-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+
+.mq-item-on {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.15);
+}
+
+.mq-item-active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(47, 107, 255, 0.18);
+}
+
+.mq-item-covered {
+  background: #f7faf9;
+}
+
+.mq-check {
+  padding-top: 2px;
+}
+
+.mq-check input {
+  cursor: pointer;
+}
+
+.mq-item-main {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mq-ctx {
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  word-break: break-all;
+}
+
+.mq-quote {
+  background: rgba(15, 118, 110, 0.16);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  font-weight: 600;
+}
+
+.mq-meta {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.mq-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.mq-action-hint {
+  margin: 0;
+}
+
+.mq-covered-fold {
+  margin-top: 4px;
+}
+
+.mq-covered-fold > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  margin-bottom: 8px;
+}
+
+/* 原文中被点击的出现位置：青色虚框高亮（可嵌在已有标注高亮内） */
+.qs-range {
+  background: rgba(15, 118, 110, 0.2);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0;
+  outline: 1.5px dashed #0f766e;
+  outline-offset: 1px;
+}

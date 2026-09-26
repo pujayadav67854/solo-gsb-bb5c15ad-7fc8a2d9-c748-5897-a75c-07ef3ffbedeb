@@ -22,6 +22,8 @@ interface Props {
   coverageKindByStart: Map<number, 'gap' | 'overlap'>
   /** 侧栏点击审计结果后要高亮的区间 */
   activeCoverageRange: { start: number; end: number } | null
+  /** 同引文漏标审阅：侧栏点击出现位置后要高亮的区间（可跨段、可与段边界不对齐） */
+  activeQuoteRange: { start: number; end: number } | null
   onSelect: (range: { start: number; end: number }, rect: ViewRect) => void
   onInspect: (ids: string[], rect: ViewRect) => void
   registerRef: (el: HTMLElement | null) => void
@@ -35,6 +37,7 @@ export function TextView({
   conflictRanges,
   coverageKindByStart,
   activeCoverageRange,
+  activeQuoteRange,
   onSelect,
   onInspect,
   registerRef,
@@ -44,6 +47,28 @@ export function TextView({
   const setRef = (el: HTMLElement | null) => {
     rootRef.current = el
     registerRef(el)
+  }
+
+  // 漏标审阅高亮：把段内与目标区间相交的部分包成 qs-range 标记（带 data-start/end 供滚动定位）
+  const renderSlice = (seg: TextSegment) => {
+    if (
+      !activeQuoteRange ||
+      seg.end <= activeQuoteRange.start ||
+      seg.start >= activeQuoteRange.end
+    ) {
+      return text.slice(seg.start, seg.end)
+    }
+    const s = Math.max(seg.start, activeQuoteRange.start)
+    const e = Math.min(seg.end, activeQuoteRange.end)
+    return (
+      <>
+        {text.slice(seg.start, s)}
+        <mark className="qs-range" data-start={s} data-end={e}>
+          {text.slice(s, e)}
+        </mark>
+        {text.slice(e, seg.end)}
+      </>
+    )
   }
 
   const readSelection = (e: React.MouseEvent | React.KeyboardEvent) => {
@@ -100,7 +125,6 @@ export function TextView({
       onKeyUp={handleKeyUp}
     >
       {segments.map((seg, i) => {
-        const slice = text.slice(seg.start, seg.end)
         const coverageKind = coverageKindByStart.get(seg.start) ?? null
         const coverageActive =
           !!activeCoverageRange &&
@@ -116,11 +140,11 @@ export function TextView({
                 data-end={seg.end}
                 className={`cov cov-${coverageKind} ${coverageActive ? 'cov-active' : ''}`}
               >
-                {slice}
+                {renderSlice(seg)}
               </mark>
             )
           }
-          return <span key={i}>{slice}</span>
+          return <span key={i}>{renderSlice(seg)}</span>
         }
         const isActive = seg.annotationIds.some((id) => activeIds.includes(id))
         const isConflict = isConflictSegment(conflictRanges, seg.start, seg.end)
@@ -134,7 +158,7 @@ export function TextView({
             className={`hl ${isActive ? 'hl-active' : ''} ${isConflict ? 'hl-conflict' : ''} ${covClass} ${coverageActive ? 'cov-active' : ''}`}
             style={{ backgroundColor: blendedColor(seg.annotationIds) }}
           >
-            {slice}
+            {renderSlice(seg)}
           </mark>
         )
       })}
