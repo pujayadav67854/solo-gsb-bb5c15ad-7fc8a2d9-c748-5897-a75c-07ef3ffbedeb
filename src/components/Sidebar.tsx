@@ -22,6 +22,7 @@ import { SamplingSection } from './SamplingSection'
 import { DatasetSplitSection } from './DatasetSplitSection'
 import { BulkSection } from './BulkSection'
 import { RelationsSection } from './RelationsSection'
+import { MissingQuoteSection } from './MissingQuoteSection'
 
 interface Props {
   /** 文档标题（训练集划分导出的 JSONL 每行需要） */
@@ -88,6 +89,15 @@ interface Props {
     mode: 'add' | 'remove',
     tags: string[],
   ) => number
+  /** 同引文漏标审阅：批量补建（App 以最新文档重核后落地），返回实际补建 / 跳过数 */
+  onFillMissingQuotes: (
+    templateId: string,
+    starts: number[],
+  ) => { created: number; skipped: number }
+  /** 漏标 / 已标注位置在原文中滚动定位 */
+  onLocateOffset: (offset: number) => void
+  /** 同引文漏标审阅分区的滚动定位 ref（顶栏按钮用） */
+  missingQuoteSectionRef?: RefObject<HTMLElement | null>
   tagCount: number
   /** 当前全部标签（标注使用 + 规则引用），供抽样配置表单列出 */
   allTags: string[]
@@ -696,6 +706,14 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(props, se
         onFocus={props.onFocus}
         onRebindStart={props.onRebindStart}
         onApply={props.onBulkApply}
+      />
+
+      <MissingQuoteSection
+        text={props.text}
+        annotations={props.annotations}
+        onFill={props.onFillMissingQuotes}
+        onLocateOffset={props.onLocateOffset}
+        sectionRef={props.missingQuoteSectionRef}
       />
 
       <RelationsSection

@@ -1912,6 +1912,172 @@ console.log('  ✓ 冲突审阅面板（含忽略折叠与交叠高亮）渲染�
   console.log('  ✓ 关系基数上限审计：规则配置持久化、源/目标超限实时列出且不阻止建立、删除与恢复重算')
 }
 
+// 同引文漏标审阅：模板枚举全部出现位置（待处理 / 区间不同不算已标注）→ 全选批量补建 → 实时重算与持久化
+{
+  const mqText = '目标甲乙目标丙丁目标戊己' // 「目标」出现在 0、4、8
+  const mqDoc = {
+    title: '漏标文档',
+    text: mqText,
+    updatedAt: Date.now(),
+    annotations: [
+      {
+        id: 'mq_t',
+        quote: '目标',
+        start: 0,
+        end: 2,
+        note: '模板备注',
+        tags: ['重点', '示例'],
+        status: 'bound',
+        createdAt: 1,
+        updatedAt: 1,
+        contextBefore: '',
+        contextAfter: '甲乙',
+      },
+      {
+        // 与第二处起止完全相同的【待处理】标注：不算已标注
+        id: 'mq_p',
+        quote: '目标',
+        start: 4,
+        end: 6,
+        note: '',
+        tags: [],
+        status: 'pending',
+        createdAt: 1,
+        updatedAt: 1,
+        contextBefore: '',
+        contextAfter: '',
+        pendingReason: '原文中已找不到该引文，需要手动重新选择',
+      },
+      {
+        // 与第二处同起点但终点不同：不算已标注
+        id: 'mq_w',
+        quote: '目标丙',
+        start: 4,
+        end: 7,
+        note: '',
+        tags: ['其它'],
+        status: 'bound',
+        createdAt: 1,
+        updatedAt: 1,
+        contextBefore: '',
+        contextAfter: '',
+      },
+    ],
+  }
+  localStorage.setItem('anchor-annotation-console:v1', JSON.stringify(mqDoc))
+  const mc = document.createElement('div')
+  mc.id = 'rootmq'
+  document.body.appendChild(mc)
+  const mr = createRoot(mc)
+
+  await new Promise<void>((resolve) => {
+    mr.render(React.createElement(React.StrictMode, null, React.createElement(App)))
+    setTimeout(resolve, 400)
+  })
+
+  const section = () => mc.querySelector('.missing-quote-section') as HTMLElement
+  assert.ok(section(), '应渲染同引文漏标审阅分区')
+  assert.ok(mc.innerHTML.includes('漏标审阅'), '顶栏应出现漏标审阅入口')
+
+  const setSelect = (el: HTMLSelectElement, v: string) => {
+    Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')!.set!.call(el, v)
+    el.dispatchEvent(new window.Event('input', { bubbles: true }))
+    el.dispatchEvent(new window.Event('change', { bubbles: true }))
+  }
+  const wait = () => new Promise<void>((resolve) => setTimeout(resolve, 120))
+  const saved = () => JSON.parse(localStorage.getItem('anchor-annotation-console:v1')!)
+
+  // 模板下拉只列出已绑定标注（待处理的 mq_p 不在其中）
+  const select = section()!.querySelector('.mq-select') as HTMLSelectElement
+  assert.ok(select, '应有模板下拉')
+  assert.strictEqual(select.querySelectorAll('option').length, 3, '占位项 + 2 条已绑定标注')
+
+  // 选择模板 mq_t：「目标」出现 3 处，仅模板自身位置已标注 → 漏标 2 处
+  setSelect(select, 'mq_t')
+  await wait()
+  assert.ok(section()!.textContent!.includes('共出现'), '应显示出现位置统计')
+  const badge = section()!.querySelector('.missing-count-badge')
+  assert.strictEqual(badge?.textContent, '2', '标题角标应显示 2 处漏标')
+  assert.strictEqual(section()!.querySelectorAll('.mq-item').length, 2, '应列出 2 处漏标')
+  const positions = [...section()!.querySelectorAll('.mq-pos')].map((e) => e.textContent)
+  assert.deepStrictEqual(positions, ['[4,6)', '[8,10)'], '漏标位置应为 [4,6) 与 [8,10)')
+  assert.ok(
+    [...section()!.querySelectorAll('.mq-quote-mark')].every((e) => e.textContent === '目标'),
+    '漏标摘录应高亮模板引文',
+  )
+  assert.ok(section()!.textContent!.includes('已标注位置（1）'), '已标注位置应只有模板自身一处')
+
+  // 全选 → 批量补建
+  const clickBtn = (text: string) => {
+    const btn = [...section()!.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === text,
+    ) as HTMLButtonElement | undefined
+    assert.ok(btn, `应存在按钮「${text}」`)
+    btn!.click()
+    return btn!
+  }
+  clickBtn('全选')
+  await wait()
+  assert.ok(section()!.textContent!.includes('已选 2 处'), '全选后应显示已选 2 处')
+  const fillBtn = [...section()!.querySelectorAll('button')].find((b) =>
+    b.textContent?.trim().startsWith('批量补建标注'),
+  ) as HTMLButtonElement
+  assert.ok(fillBtn.textContent!.includes('2'), '补建按钮应标注数量')
+  fillBtn.click()
+  await wait()
+
+  // 落地：新增 2 条标注，复制模板标签与备注，锚点上下文按各自位置重新截取
+  const after = saved()
+  assert.strictEqual(after.annotations.length, 5, '应新增 2 条标注')
+  const created = after.annotations.filter((a: { id: string }) => a.id.startsWith('a_'))
+  assert.strictEqual(created.length, 2)
+  assert.deepStrictEqual(
+    created.map((a: { start: number; end: number }) => [a.start, a.end]).sort((x: number[], y: number[]) => x[0]! - y[0]!),
+    [
+      [4, 6],
+      [8, 10],
+    ],
+  )
+  for (const a of created as Array<Record<string, unknown>>) {
+    assert.strictEqual(a.quote, '目标')
+    assert.deepStrictEqual(a.tags, ['重点', '示例'], '应复制模板标签')
+    assert.strictEqual(a.note, '模板备注', '应复制模板备注')
+    assert.strictEqual(a.status, 'bound')
+    const start = a.start as number
+    const end = a.end as number
+    assert.strictEqual(a.contextBefore, mqText.slice(Math.max(0, start - 50), start))
+    assert.strictEqual(a.contextAfter, mqText.slice(end, Math.min(mqText.length, end + 50)))
+  }
+  assert.ok(section()!.textContent!.includes('已补建 2 条标注'), '应给出补建结果提示')
+
+  // 实时重算：补建后漏标清零
+  await wait()
+  assert.ok(section()!.textContent!.includes('没有漏标'), '补建后应显示没有漏标')
+  assert.strictEqual(section()!.querySelectorAll('.mq-item').length, 0)
+
+  // 刷新（重新挂载）后数据保持一致；重选模板后统计仍正确（新标注随本地保存与导出链路）
+  mr.unmount()
+  const mc2 = document.createElement('div')
+  mc2.id = 'rootmq2'
+  document.body.appendChild(mc2)
+  const mr2 = createRoot(mc2)
+  await new Promise<void>((resolve) => {
+    mr2.render(React.createElement(React.StrictMode, null, React.createElement(App)))
+    setTimeout(resolve, 400)
+  })
+  const section2 = () => mc2.querySelector('.missing-quote-section') as HTMLElement
+  const select2 = section2()!.querySelector('.mq-select') as HTMLSelectElement
+  setSelect(select2, 'mq_t')
+  await wait()
+  assert.ok(section2()!.textContent!.includes('已标注位置（3）'), '刷新后 3 处均应已标注')
+  assert.strictEqual(saved().annotations.length, 5, '刷新后标注数保持')
+  console.log('  ✓ 同引文漏标审阅：模板枚举、待处理/区间不同不算已标注、批量补建复制标签备注、实时重算与持久化')
+
+  mr2.unmount()
+  mc.remove()
+  mc2.remove()
+}
+
 // 旧版数据（无 conflictRules / ignoredConflicts 字段）应无损加载
 const legacy = {
   title: '旧文档',

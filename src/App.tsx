@@ -32,6 +32,7 @@ import {
 } from './lib/conflicts'
 import { planTagRename } from './lib/rename'
 import { planBulkTags } from './lib/bulk'
+import { planMissingQuoteFill } from './lib/missingQuotes'
 import {
   auditCoverage,
   normalizeCoverageTags,
@@ -133,6 +134,7 @@ export default function App() {
   const samplingSectionRef = useRef<HTMLElement | null>(null)
   const datasetSplitSectionRef = useRef<HTMLElement | null>(null)
   const relationsSectionRef = useRef<HTMLElement | null>(null)
+  const missingQuoteSectionRef = useRef<HTMLElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 本地持久化
@@ -428,6 +430,36 @@ export default function App() {
       return { ...d, annotations: plan.annotations, sampleReviews, updatedAt: now }
     })
     return preview.affectedCount
+  }
+
+  // ---------- 同引文漏标审阅 ----------
+
+  /**
+   * 批量补建同引文漏标：先以当前文档算出预览（与侧栏同源），
+   * 落地时在 setDoc 内以最新文档重新核对候选位置与现有标注——
+   * 已变化或已补过的位置跳过，仅仍为漏标的位置补建。
+   * 返回实际补建 / 跳过数，供侧栏给出结果提示。
+   */
+  const applyMissingQuoteFill = (
+    templateId: string,
+    starts: number[],
+  ): { created: number; skipped: number } => {
+    const preview = planMissingQuoteFill(doc.text, doc.annotations, templateId, starts)
+    if (!preview) return { created: 0, skipped: 0 }
+    if (preview.created.length > 0) {
+      const now = Date.now()
+      setDoc((d) => {
+        // 落地前以最新状态再核一次，保持与批量标签操作相同的原子语义
+        const plan = planMissingQuoteFill(d.text, d.annotations, templateId, starts, now)
+        if (!plan || plan.created.length === 0) return d
+        return { ...d, annotations: [...d.annotations, ...plan.created], updatedAt: now }
+      })
+    }
+    return { created: preview.created.length, skipped: preview.skippedStarts.length }
+  }
+
+  const scrollToMissingQuotes = () => {
+    missingQuoteSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   const ignoreConflict = (c: ConflictItem) => {
@@ -1056,6 +1088,15 @@ export default function App() {
               )}
             </button>
           )}
+          {mode === 'view' && (
+            <button
+              className="btn btn-ghost"
+              onClick={scrollToMissingQuotes}
+              title="以一条已绑定标注为模板，枚举同引文的全部出现位置并批量补建漏标"
+            >
+              漏标审阅
+            </button>
+          )}
           <button className="btn btn-ghost" onClick={() => fileInputRef.current?.click()}>
             导入 JSON
           </button>
@@ -1212,6 +1253,9 @@ export default function App() {
             onConfigureRules={() => setPopover({ kind: 'rules' })}
             onRenameTags={() => setPopover({ kind: 'rename-tags' })}
             onBulkApply={applyBulkTags}
+            onFillMissingQuotes={applyMissingQuoteFill}
+            onLocateOffset={scrollOffsetIntoView}
+            missingQuoteSectionRef={missingQuoteSectionRef}
             tagCount={allTags.length}
             allTags={allTags}
             onDownloadReport={downloadReviewReport}

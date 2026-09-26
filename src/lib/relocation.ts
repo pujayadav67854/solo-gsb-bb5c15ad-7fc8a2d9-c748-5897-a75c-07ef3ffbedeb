@@ -49,8 +49,8 @@ export type AnchorOutcome =
         | 'zero-score' // 评分命中但得分为 0
     }
 
-/** 找出 needle 在 text 中的全部出现位置 */
-function findAllOccurrences(text: string, needle: string): number[] {
+/** 找出 needle 在 text 中的全部出现位置（允许重叠），按起点升序 */
+export function findAllOccurrences(text: string, needle: string): number[] {
   if (!needle) return []
   const out: number[] = []
   let from = 0
